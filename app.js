@@ -32,6 +32,76 @@ const LOG_KEY = 'dashboard-logs';
 const MEMO_KEY = 'dashboard-memo';
 const THEME_KEY = 'dashboard-theme';
 
+const TASK_STATUS_LABEL = {
+  pending: '대기',
+  'in-progress': '진행중',
+  done: '완료',
+  blocked: '차단',
+};
+
+const TASK_VIEW_STATE = {
+  search: '',
+  status: 'all',
+  selectedTaskId: null,
+};
+
+const LOG_VIEW_STATE = {
+  level: 'all',
+};
+
+const STRATEGY_STATE = {
+  selected: new Set(),
+};
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (ch) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  })[ch]);
+}
+
+function setText(id, text) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = text;
+}
+
+function getAllLogs() {
+  let raw;
+  try {
+    raw = JSON.parse(localStorage.getItem(LOG_KEY) || '[]');
+  } catch (err) {
+    raw = [];
+  }
+  if (!Array.isArray(raw)) raw = [];
+  return raw.map((log) => ({
+    ts: typeof log.ts === 'number' ? log.ts : Date.now(),
+    msg: typeof log.msg === 'string' ? log.msg : '',
+    level: log.level === 'warn' || log.level === 'error' ? log.level : 'info',
+  }));
+}
+
+function getVisibleLogs() {
+  const logs = getAllLogs();
+  if (LOG_VIEW_STATE.level === 'all') return logs;
+  return logs.filter((log) => log.level === LOG_VIEW_STATE.level);
+}
+
+function getVisibleTasks() {
+  const query = TASK_VIEW_STATE.search.trim().toLowerCase();
+  return TASKS.filter((task) => {
+    if (TASK_VIEW_STATE.status !== 'all' && task.status !== TASK_VIEW_STATE.status) return false;
+    if (!query) return true;
+    const agent = AGENTS.find((item) => item.id === task.agentId);
+    const haystack = [task.title, task.summary, agent ? agent.name : '']
+      .join(' ')
+      .toLowerCase();
+    return haystack.includes(query);
+  });
+}
+
 function renderAgentCards(filter = 'all') {
   const container = document.getElementById('agentCards');
   if (!container) return;
@@ -39,8 +109,8 @@ function renderAgentCards(filter = 'all') {
   container.innerHTML = list.map((agent) => `
     <article class="agent-card agent-card--${agent.status}" data-state="${agent.status}">
       <div class="agent-card__info">
-        <div class="agent-card__name">${agent.name}</div>
-        <div class="agent-card__role">${agent.role}</div>
+        <div class="agent-card__name">${escapeHtml(agent.name)}</div>
+        <div class="agent-card__role">${escapeHtml(agent.role)}</div>
       </div>
       <span class="agent-badge agent-badge--${agent.status}">${agent.status}</span>
     </article>
@@ -50,41 +120,122 @@ function renderAgentCards(filter = 'all') {
 function renderTasks() {
   const list = document.getElementById('taskList');
   if (!list) return;
-  list.innerHTML = TASKS.map((task) => {
-    const agent = AGENTS.find((item) => item.id === task.agentId);
-    return `
-      <li class="task-item">
-        <span class="task-badge task-badge--${task.status}">${task.status}</span>
-        <span class="task-item__title">${task.title}</span>
-        <span class="task-item__agent">${agent ? agent.name : ''}</span>
+  const visible = getVisibleTasks();
+
+  if (visible.length === 0) {
+    const isFiltering =
+      TASK_VIEW_STATE.search.trim() !== '' || TASK_VIEW_STATE.status !== 'all';
+    list.innerHTML = `
+      <li class="empty-state" role="status">
+        <span class="empty-state__icon" aria-hidden="true">${isFiltering ? '🔍' : '📭'}</span>
+        <span>${isFiltering ? '조건에 맞는 작업이 없습니다.' : '작업이 없습니다.'}</span>
+        ${isFiltering ? '<span class="empty-state__hint">검색어나 필터를 변경해 보세요.</span>' : ''}
       </li>
     `;
-  }).join('');
+  } else {
+    list.innerHTML = visible.map((task) => {
+      const agent = AGENTS.find((item) => item.id === task.agentId);
+      const isSelected = task.id === TASK_VIEW_STATE.selectedTaskId;
+      return `
+        <li
+          class="task-item${isSelected ? ' selected' : ''}"
+          data-task-id="${task.id}"
+          role="button"
+          tabindex="0"
+          aria-pressed="${isSelected}"
+        >
+          <span class="task-badge task-badge--${task.status}">${task.status}</span>
+          <span class="task-item__title">${escapeHtml(task.title)}</span>
+          <span class="task-item__agent">${agent ? escapeHtml(agent.name) : ''}</span>
+        </li>
+      `;
+    }).join('');
+  }
+
+  const selectedTask = TASK_VIEW_STATE.selectedTaskId
+    ? TASKS.find((task) => task.id === TASK_VIEW_STATE.selectedTaskId)
+    : null;
+  renderTaskDetail(selectedTask);
+}
+
+function renderTaskDetail(task) {
+  const detail = document.getElementById('taskDetail');
+  if (!detail) return;
+  if (!task) {
+    detail.innerHTML = '<span class="task-detail__empty">작업을 선택하면 상세 정보가 표시됩니다.</span>';
+    return;
+  }
+  const agent = AGENTS.find((item) => item.id === task.agentId);
+  const statusLabel = TASK_STATUS_LABEL[task.status] || task.status;
+  detail.innerHTML = `
+    <div class="task-detail__title">${escapeHtml(task.title)}</div>
+    <div class="task-detail__summary">${escapeHtml(task.summary)}</div>
+    <div class="task-detail__meta">
+      <span class="task-detail__meta-item">
+        상태: <strong><span class="task-badge task-badge--${task.status}">${escapeHtml(statusLabel)}</span></strong>
+      </span>
+      <span class="task-detail__meta-item">
+        담당: <strong>${agent ? escapeHtml(agent.name) : '미지정'}</strong>
+      </span>
+    </div>
+  `;
 }
 
 function renderLogs(logs) {
   const logList = document.getElementById('logList');
   if (!logList) return;
-  logList.innerHTML = logs.map((log) => `
-    <div class="log-item">
-      <span class="log-item__time">${new Date(log.ts).toLocaleTimeString()}</span>
-      <span class="log-item__msg">${log.msg}</span>
-    </div>
-  `).join('');
+
+  if (!logs || logs.length === 0) {
+    const isFiltering = LOG_VIEW_STATE.level !== 'all';
+    const allLogs = getAllLogs();
+    const hasAny = allLogs.length > 0;
+    let message;
+    let hint;
+    let icon;
+    if (isFiltering && hasAny) {
+      icon = '🔍';
+      message = `${LOG_VIEW_STATE.level} 레벨 로그가 없습니다.`;
+      hint = '다른 레벨을 선택해 보세요.';
+    } else {
+      icon = '📋';
+      message = '로그가 없습니다.';
+      hint = '+ info / + warn 버튼으로 로그를 추가해 보세요.';
+    }
+    logList.innerHTML = `
+      <div class="empty-state" role="status">
+        <span class="empty-state__icon" aria-hidden="true">${icon}</span>
+        <span>${message}</span>
+        <span class="empty-state__hint">${hint}</span>
+      </div>
+    `;
+    return;
+  }
+
+  logList.innerHTML = logs.map((log) => {
+    const level = log.level || 'info';
+    const time = new Date(log.ts).toLocaleTimeString();
+    return `
+      <div class="log-item log-item--${level}">
+        <span class="log-item__level">${level}</span>
+        <span class="log-item__time">${escapeHtml(time)}</span>
+        <span class="log-item__msg">${escapeHtml(log.msg)}</span>
+      </div>
+    `;
+  }).join('');
   logList.scrollTop = logList.scrollHeight;
 }
 
-function addLog(msg) {
-  let logs = JSON.parse(localStorage.getItem(LOG_KEY) || '[]');
-  logs.push({ ts: Date.now(), msg });
+function addLog(msg, level = 'info') {
+  let logs = getAllLogs();
+  logs.push({ ts: Date.now(), msg, level });
   logs = logs.slice(-50);
   localStorage.setItem(LOG_KEY, JSON.stringify(logs));
-  renderLogs(logs);
+  renderLogs(getVisibleLogs());
+  renderSummary();
 }
 
 function loadLogsAndMemo() {
-  const logs = JSON.parse(localStorage.getItem(LOG_KEY) || '[]');
-  renderLogs(logs);
+  renderLogs(getVisibleLogs());
 
   const memo = localStorage.getItem(MEMO_KEY) || '';
   const memoDisplay = document.getElementById('memoDisplay');
@@ -102,7 +253,7 @@ function renderStrategies() {
       <label>
         <input type="checkbox" data-strategy="${strategy.id}">
         <span class="strategy-item__emoji">${strategy.emoji}</span>
-        <span class="strategy-item__name">${strategy.name}</span>
+        <span class="strategy-item__name">${escapeHtml(strategy.name)}</span>
       </label>
     </li>
   `).join('');
@@ -112,21 +263,41 @@ function renderStrategies() {
 function updateStrategyDesc() {
   const desc = document.getElementById('strategyDesc');
   if (!desc) return;
-  const checked = [...document.querySelectorAll('#strategyList input[type="checkbox"]:checked')]
-    .map((checkbox) => STRATEGIES.find((strategy) => strategy.id === checkbox.dataset.strategy))
-    .filter(Boolean);
+  STRATEGY_STATE.selected = new Set(
+    [...document.querySelectorAll('#strategyList input[type="checkbox"]:checked')]
+      .map((checkbox) => checkbox.dataset.strategy)
+  );
+  const checked = STRATEGIES.filter((strategy) => STRATEGY_STATE.selected.has(strategy.id));
 
   if (checked.length === 0) {
     desc.innerHTML = '<span class="strategy-desc__empty">전략을 선택하면 설명이 표시됩니다.</span>';
-    return;
+  } else {
+    desc.innerHTML = checked.map((strategy) => `
+      <div class="strategy-desc-item">
+        <div class="strategy-desc-item__title">${strategy.emoji} ${escapeHtml(strategy.name)}</div>
+        <div class="strategy-desc-item__body">${escapeHtml(strategy.description)}</div>
+      </div>
+    `).join('');
   }
+  renderSummary();
+}
 
-  desc.innerHTML = checked.map((strategy) => `
-    <div class="strategy-desc-item">
-      <div class="strategy-desc-item__title">${strategy.emoji} ${strategy.name}</div>
-      <div class="strategy-desc-item__body">${strategy.description}</div>
-    </div>
-  `).join('');
+function renderSummary() {
+  const agentsRunning = AGENTS.filter((agent) => agent.status === 'running').length;
+  const agentsDone = AGENTS.filter((agent) => agent.status === 'done').length;
+  const tasksInProgress = TASKS.filter((task) => task.status === 'in-progress').length;
+  const tasksPending = TASKS.filter((task) => task.status === 'pending').length;
+  const logsCount = getAllLogs().length;
+  const strategiesSelected = STRATEGY_STATE.selected.size;
+
+  setText('summaryAgents', String(AGENTS.length));
+  setText('summaryAgentsMeta', `실행중 ${agentsRunning} · 완료 ${agentsDone}`);
+  setText('summaryTasks', String(TASKS.length));
+  setText('summaryTasksMeta', `진행중 ${tasksInProgress} · 대기 ${tasksPending}`);
+  setText('summaryLogs', String(logsCount));
+  setText('summaryLogsMeta', logsCount > 0 ? '최근 활동' : '활동 없음');
+  setText('summaryStrategies', String(STRATEGIES.length));
+  setText('summaryStrategiesMeta', `선택됨 ${strategiesSelected}`);
 }
 
 function initFilterButtons() {
@@ -138,6 +309,59 @@ function initFilterButtons() {
     filterBar.querySelectorAll('.agent-filter__btn').forEach((button) => button.classList.remove('active'));
     btn.classList.add('active');
     renderAgentCards(btn.dataset.filter);
+  });
+}
+
+function initTaskInteractions() {
+  const search = document.getElementById('taskSearch');
+  if (search) {
+    search.addEventListener('input', (event) => {
+      TASK_VIEW_STATE.search = event.target.value;
+      renderTasks();
+    });
+  }
+
+  const filterBar = document.querySelector('.task-filter');
+  if (filterBar) {
+    filterBar.addEventListener('click', (event) => {
+      const btn = event.target.closest('[data-task-filter]');
+      if (!btn) return;
+      filterBar.querySelectorAll('.task-filter__btn').forEach((button) => button.classList.remove('active'));
+      btn.classList.add('active');
+      TASK_VIEW_STATE.status = btn.dataset.taskFilter;
+      renderTasks();
+    });
+  }
+
+  const taskList = document.getElementById('taskList');
+  if (taskList) {
+    taskList.addEventListener('click', (event) => {
+      const item = event.target.closest('.task-item[data-task-id]');
+      if (!item) return;
+      TASK_VIEW_STATE.selectedTaskId = item.dataset.taskId;
+      renderTasks();
+    });
+    taskList.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      const item = event.target.closest('.task-item[data-task-id]');
+      if (!item) return;
+      event.preventDefault();
+      TASK_VIEW_STATE.selectedTaskId = item.dataset.taskId;
+      renderTasks();
+    });
+  }
+}
+
+function initLogInteractions() {
+  const filterBar = document.querySelector('.log-filter');
+  if (!filterBar) return;
+  filterBar.addEventListener('click', (event) => {
+    const btn = event.target.closest('[data-log-filter]');
+    if (!btn) return;
+    filterBar.querySelectorAll('.log-filter__btn').forEach((button) => button.classList.remove('active'));
+    btn.classList.add('active');
+    LOG_VIEW_STATE.level = btn.dataset.logFilter;
+    renderLogs(getVisibleLogs());
   });
 }
 
@@ -172,12 +396,22 @@ document.addEventListener('DOMContentLoaded', () => {
   loadLogsAndMemo();
   renderStrategies();
   initFilterButtons();
+  initTaskInteractions();
+  initLogInteractions();
   initDarkMode();
+  renderSummary();
 
   const addLogBtn = document.getElementById('addLogBtn');
   if (addLogBtn) {
     addLogBtn.addEventListener('click', () => {
-      addLog('에이전트 실행 시뮬레이션 #' + Date.now());
+      addLog('에이전트 실행 시뮬레이션 #' + Date.now(), 'info');
+    });
+  }
+
+  const addWarnLogBtn = document.getElementById('addWarnLogBtn');
+  if (addWarnLogBtn) {
+    addWarnLogBtn.addEventListener('click', () => {
+      addLog('경고 시뮬레이션 #' + Date.now(), 'warn');
     });
   }
 

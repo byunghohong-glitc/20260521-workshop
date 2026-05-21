@@ -12,6 +12,29 @@
     <button id="darkModeToggle" class="btn btn--ghost">🌙 다크</button>
   </header>
 
+  <section class="dashboard-summary" aria-label="대시보드 요약">
+    <div class="summary-card">
+      <span>에이전트</span>
+      <strong id="summaryAgents">0</strong>
+      <small id="summaryAgentsMeta">실행중 0 · 완료 0</small>
+    </div>
+    <div class="summary-card">
+      <span>작업</span>
+      <strong id="summaryTasks">0</strong>
+      <small id="summaryTasksMeta">진행중 0 · 대기 0</small>
+    </div>
+    <div class="summary-card">
+      <span>로그</span>
+      <strong id="summaryLogs">0</strong>
+      <small id="summaryLogsMeta">최근 활동</small>
+    </div>
+    <div class="summary-card">
+      <span>전략</span>
+      <strong id="summaryStrategies">0</strong>
+      <small id="summaryStrategiesMeta">선택됨 0</small>
+    </div>
+  </section>
+
   <main class="dashboard-grid">
     <section class="panel panel--agents">
       <div class="panel__header"><h2>에이전트</h2></div>
@@ -30,7 +53,27 @@
     <section class="panel panel--tasks">
       <div class="panel__header"><h2>작업 목록</h2></div>
       <div class="panel__body">
+        <div class="panel__toolbar">
+          <input
+            id="taskSearch"
+            type="search"
+            class="search-input"
+            placeholder="제목, 요약, 담당자 검색..."
+            aria-label="작업 검색"
+            autocomplete="off"
+          >
+          <div class="task-filter" role="group" aria-label="작업 상태 필터">
+            <button class="task-filter__btn active" data-task-filter="all" type="button">전체</button>
+            <button class="task-filter__btn" data-task-filter="pending" type="button">대기</button>
+            <button class="task-filter__btn" data-task-filter="in-progress" type="button">진행중</button>
+            <button class="task-filter__btn" data-task-filter="done" type="button">완료</button>
+            <button class="task-filter__btn" data-task-filter="blocked" type="button">차단</button>
+          </div>
+        </div>
         <ul class="task-list" id="taskList"></ul>
+        <div class="task-detail" id="taskDetail" aria-live="polite">
+          <span class="task-detail__empty">작업을 선택하면 상세 정보가 표시됩니다.</span>
+        </div>
       </div>
     </section>
 
@@ -40,9 +83,18 @@
         <div class="log-section">
           <div class="log-section__header">
             <span class="log-section__title">실행 로그</span>
-            <button id="addLogBtn" class="btn btn--ghost btn--sm">+ 로그 추가</button>
+            <div class="log-section__actions">
+              <button id="addLogBtn" class="btn btn--ghost btn--sm" type="button">+ info</button>
+              <button id="addWarnLogBtn" class="btn btn--ghost btn--sm" type="button">+ warn</button>
+            </div>
           </div>
-          <div class="log-list" id="logList"></div>
+          <div class="log-filter" role="group" aria-label="로그 레벨 필터">
+            <button class="log-filter__btn active" data-log-filter="all" type="button">전체</button>
+            <button class="log-filter__btn" data-log-filter="info" type="button">info</button>
+            <button class="log-filter__btn" data-log-filter="warn" type="button">warn</button>
+            <button class="log-filter__btn" data-log-filter="error" type="button">error</button>
+          </div>
+          <div class="log-list" id="logList" aria-live="polite"></div>
         </div>
         <div class="memo-section">
           <div class="log-section__title">메모</div>
