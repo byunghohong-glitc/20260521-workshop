@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>멀티 에이전트 오케스트레이션 대시보드</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="dashboard-header">
+    <h1>멀티 에이전트 오케스트레이션 대시보드</h1>
+    <button id="darkModeToggle" class="btn btn--ghost">🌙 다크</button>
+  </header>
+
+  <main class="dashboard-grid">
+    <section class="panel panel--agents">
+      <div class="panel__header"><h2>에이전트</h2></div>
+      <div class="panel__body">
+        <div class="agent-filter">
+          <button class="agent-filter__btn active" data-filter="all">전체</button>
+          <button class="agent-filter__btn" data-filter="idle">대기</button>
+          <button class="agent-filter__btn" data-filter="running">실행중</button>
+          <button class="agent-filter__btn" data-filter="done">완료</button>
+          <button class="agent-filter__btn" data-filter="error">오류</button>
+        </div>
+        <div class="agent-cards" id="agentCards"></div>
+      </div>
+    </section>
+
+    <section class="panel panel--tasks">
+      <div class="panel__header"><h2>작업 목록</h2></div>
+      <div class="panel__body">
+        <ul class="task-list" id="taskList"></ul>
+      </div>
+    </section>
+
+    <section class="panel panel--logs">
+      <div class="panel__header"><h2>로그 / 메모</h2></div>
+      <div class="panel__body">
+        <div class="log-section">
+          <div class="log-section__header">
+            <span class="log-section__title">실행 로그</span>
+            <button id="addLogBtn" class="btn btn--ghost btn--sm">+ 로그 추가</button>
+          </div>
+          <div class="log-list" id="logList"></div>
+        </div>
+        <div class="memo-section">
+          <div class="log-section__title">메모</div>
+          <textarea
+            id="memoInput"
+            class="memo-input"
+            placeholder="메모를 입력하세요..."
+            rows="3"
+          ></textarea>
+          <div class="memo-actions">
+            <button id="saveMemoBtn" class="btn btn--ghost btn--sm">저장</button>
+          </div>
+          <div id="memoDisplay" class="memo-display"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel panel--strategy">
+      <div class="panel__header"><h2>모델 전략</h2></div>
+      <div class="panel__body">
+        <ul class="strategy-list" id="strategyList"></ul>
+        <div class="strategy-desc" id="strategyDesc">
+          <span class="strategy-desc__empty">전략을 선택하면 설명이 표시됩니다.</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js" defer></script>
+</body>
+</html>
